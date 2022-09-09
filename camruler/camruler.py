@@ -21,9 +21,9 @@ import frame_draw
 
 # camera values
 camera_id = 0
-camera_width = 1920
-camera_height = 1080
-camera_frame_rate = 30
+camera_width = 640
+camera_height = 480
+camera_frame_rate = 60
 #camera_fourcc = cv2.VideoWriter_fourcc(*"YUYV")
 camera_fourcc = cv2.VideoWriter_fourcc(*"MJPG")
 
@@ -677,3 +677,5 @@ exit()
 #-------------------------------
 # end
 #-------------------------------
+
+
