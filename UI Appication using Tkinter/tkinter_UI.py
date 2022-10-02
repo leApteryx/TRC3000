@@ -1,10 +1,42 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter.messagebox import showerror
+import RPi.GPIO as GPIO  # import GPIO
+from hx711 import HX711  # import the class HX711
+import cv2
+import numpy as np 
+from picamera.array import PiRGBArray
+from picamera import PiCamera 
 
 # functions
 def load_cell():
-    print("load_cell calibrated!")
+    def cleanAndExit():
+        print("Cleaning...")
+
+        if not EMULATE_HX711:
+            GPIO.cleanup()
+            
+        print("Bye!")
+        sys.exit()
+
+    hx = HX711(5, 6)
+    hx.set_reading_format("MSB", "MSB")
+    hx.reset()
+    hx.tare()
+
+    print("Tare done! Add weight now...")
+
+    while True:
+        try:
+            val = hx.get_weight(5)
+            print(math.trunc(val*0.0044))
+
+            hx.power_down()
+            hx.power_up()
+            time.sleep(0.1)
+
+        except (KeyboardInterrupt, SystemExit):
+            cleanAndExit()
 
 def servo():
     print("servo calibrated!")
@@ -13,7 +45,45 @@ def imu():
     print("imu calibrated!")
 
 def camera():
-    print("camera calibrated!")
+    cv2.namedWindow("Trackbars")
+ 
+    cv2.createTrackbar("B", "Trackbars", 0, 255, nothing)
+    cv2.createTrackbar("G", "Trackbars", 0, 255, nothing)
+    cv2.createTrackbar("R", "Trackbars", 0, 255, nothing)
+
+    camera = PiCamera()
+    camera.resolution = (640, 480)
+    camera.framerate = 30
+
+    rawCapture = PiRGBArray(camera, size=(640, 480))
+
+    for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
+        image = frame.array
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        B = cv2.getTrackbarPos("B", "Trackbars")
+        G = cv2.getTrackbarPos("G", "Trackbars")
+        R = cv2.getTrackbarPos("R", "Trackbars")
+
+        green = np.uint8([[[B, G, R]]])
+        hsvGreen = cv2.cvtColor(green,cv2.COLOR_BGR2HSV)
+        lowerLimit = np.uint8([hsvGreen[0][0][0]-10,100,100])
+        upperLimit = np.uint8([hsvGreen[0][0][0]+10,255,255])
+
+        mask = cv2.inRange(hsv, lowerLimit, upperLimit)
+
+        result = cv2.bitwise_and(image	, image	, mask=mask)
+
+        cv2.imshow("frame", image)
+        cv2.imshow("mask", mask)
+        cv2.imshow("result", result)
+
+        key = cv2.waitKey(1)
+        rawCapture.truncate(0)
+        if key == 27:
+            break
+
+    cv2.destroyAllWindows()
 
 def lights():
     print("lights turned on!")
