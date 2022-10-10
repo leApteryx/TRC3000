@@ -5,7 +5,6 @@
 from PiicoDev_VEML6030 import PiicoDev_VEML6030
 import RPi.GPIO as GPIO
 import time
-LED_PIN = 17
 
 # Initialise Sensor
 light = PiicoDev_VEML6030()
