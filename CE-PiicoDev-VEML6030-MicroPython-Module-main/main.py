@@ -3,14 +3,29 @@
 # and displays the result
 
 from PiicoDev_VEML6030 import PiicoDev_VEML6030
-from time import sleep
+import RPi.GPIO as GPIO
+import time
+LED_PIN = 17
 
 # Initialise Sensor
 light = PiicoDev_VEML6030()
 
+lightThreshold = 150
+LED_PIN = 17
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(LED_PIN, GPIO.OUT)
+
 while True:
     # Read and print light data
     lightVal = light.read()
-    print(str(lightVal) + " lux")
-    
+    print("The light intensity is currently " + str(lightVal) + " lux")
     sleep(1)
+    if lightVal < lightThreshold:
+        GPIO.output(LED_PIN, GPIO.HIGH)
+        sleep(1)
+    else:
+        GPIO.output(LED_PIN, GPIO.LOW)
+        sleep(1) 
+    sleep(1)
+    
+GPIO.cleanup()
