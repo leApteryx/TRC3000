@@ -1,9 +1,11 @@
 import cv2
 import numpy as np
 np.set_printoptions(threshold=np.inf)
+from picamera.array import PiRGBArray
+from picamera import PiCamera 
 
 #Load cam_image
-cam = cv2.VideoCapture(0)
+cam = PiCamera()
 
 cv2.namedWindow("test")
 

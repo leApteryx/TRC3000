@@ -9,16 +9,15 @@ import time
 
 # Get I2C bus
 bus = smbus.SMBus(1)
-
+time.sleep(1)
 # BH1715 address, 0x23(35)
 # Send power on command
 #		0x01(01)	Power On
-bus.write_byte(0x23, 0x01)
+#bus.write_byte(0x23, 0x01)
 # BH1715 address, 0x23(35)
 # Send continuous measurement command
 #		0x10(16)	Set Continuous high resolution mode, 1 lux resolution, Time = 120ms
-bus.write_byte(0x23, 0x10)
-
+#.write_byte(0x23, 0x01)
 time.sleep(0.5)
 
 # BH1715 address, 0x23(35)
@@ -30,4 +29,4 @@ data = bus.read_i2c_block_data (0x23, 2)
 luminance = (data[0] * 256 + data[1]) / 1.2
 
 # Output data to screen
-print "Ambient Light luminance : %.2f lux" %luminance
+print ("Ambient Light luminance : %.2f lux" %luminance)

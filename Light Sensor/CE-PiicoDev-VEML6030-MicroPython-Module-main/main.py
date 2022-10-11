@@ -18,13 +18,13 @@ while True:
     # Read and print light data
     lightVal = light.read()
     print("The light intensity is currently " + str(lightVal) + " lux")
-    sleep(1)
+    time.sleep(1)
     if lightVal < lightThreshold:
         GPIO.output(LED_PIN, GPIO.HIGH)
-        sleep(1)
+        time.sleep(1)
     else:
         GPIO.output(LED_PIN, GPIO.LOW)
-        sleep(1) 
-    sleep(1)
+        time.sleep(1) 
+    time.sleep(1)
     
 GPIO.cleanup()

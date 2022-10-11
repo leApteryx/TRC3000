@@ -25,8 +25,8 @@ if __name__ == "__main__":
         time.sleep(2)
 
         
-        duty_cycle = input("Enter a position between 2 and 12 inclusive: ")
-        speed = input ("Enter a speed between 0 and 30 inclusive")
+        duty_cycle = int(input("Enter a position between 2 and 12 inclusive: "))
+        speed = int(input ("Enter a speed between 0 and 30 inclusive: "))
         time1 = time.time()
         moveServoForward(duty_cycle,servo1,speed)
         time2 = time.time()
