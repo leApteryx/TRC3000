@@ -5,6 +5,10 @@ import time
 # Set GPIO numbering mode
 GPIO.setmode(GPIO.BOARD)
 
+# Turn on servo relay
+GPIO.setup(40, GPIO.OUT)
+GPIO.output(40, GPIO.LOW)
+    
 # Set pin 11 as an output, and set servo1 as pin 11 as PWM
 GPIO.setup(11,GPIO.OUT)
 servo1 = GPIO.PWM(11,50) # Note 11 is pin, 50 = 50Hz pulse
@@ -42,6 +46,7 @@ servo1.ChangeDutyCycle(0)
 
 #Clean things up at the end
 servo1.stop()
+GPIO.output(40, GPIO.HIGH)
 GPIO.cleanup()
 print ("Goodbye")
 

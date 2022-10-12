@@ -1,61 +1,122 @@
 import tkinter as tk
 from tkinter import ttk
+from tkinter import *
 from tkinter.messagebox import showerror
 import RPi.GPIO as GPIO  # import GPIO
 from hx711 import HX711  # import the class HX711
 import time
 import math
 import sys
+import smbus2
+from time import sleep
 import cv2
-import numpy as np 
-from picamera.array import PiRGBArray
-from picamera import PiCamera 
+import numpy as np
+from PIL import Image # PIL = Python Imaging Library
 
-# functions
+
+## system bootup ##
+# taring load cell
+hx = HX711(5, 6)
+hx.set_reading_format("MSB", "MSB")
+hx.reset()
+hx.tare()
+
+# IMU constants
+PWR_MGMT_1 = 0x6B
+SMPLRT_DIV = 0x19
+CONFIG = 0x1A
+GYRO_CONFIG = 0x1B
+INT_ENABLE = 0x38
+ACCEL_XOUT_H = 0x3B
+ACCEL_YOUT_H = 0x3D
+ACCEL_ZOUT_H = 0x3F
+GYRO_XOUT_H = 0x43
+GYRO_YOUT_H = 0x45
+GYRO_ZOUT_H = 0x47
+bus = smbus2.SMBus(1)
+Device_Address = 0x68
+
+# reset camera image number
+current_frame = 1
+
+# GPIO setup
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(16, GPIO.OUT) # GPIO.BOARD = 36 (load cell)
+GPIO.setup(21, GPIO.OUT) # GPIO.BOARD = 40 (servo)
+
+
+## functions ##
+def setup(function):
+    Output.delete("1.0", END) # clear existing output
+    Output.insert(END, "Now running: " + function)
+    Output.update()
+    
+    
+def cleanup():
+    # turn off all relays
+    GPIO.output(16, GPIO.HIGH) # GPIO.BOARD = 36 (load cell)
+    GPIO.output(21, GPIO.HIGH) # BOARD no. = 40 (servo)
+    
+    Output.insert(END, "\nGoodbye!")
+    Output.update()
+
+
+def on_closing():
+    GPIO.cleanup()
+    print("UI closed!")
+    root.destroy()
+
+
 def load_cell():
-    def cleanAndExit():
-        print("Cleaning...")
+    setup(load_cell.__name__)
+    
+    # turn on load cell relay
+    GPIO.output(16, GPIO.LOW) # GPIO.BOARD = 36
 
-        if not EMULATE_HX711:
-            GPIO.cleanup()
-            
-        print("Bye!")
-        sys.exit()
-
+    # tare load cell
     hx = HX711(5, 6)
     hx.set_reading_format("MSB", "MSB")
     hx.reset()
     hx.tare()
+    
+    Output.insert(END, "\nLoad cell tared! Add item now:")
+    Output.update()
 
-    print("Tare done! Add weight now...")
+    # read load cell
+    load = 0
+    while not load:
+        val = hx.get_weight(5)
+        load = math.trunc(val*0.0044)
+        Output.insert(END, "\n" + str(load))
+        Output.update()
 
-    while True:
-        try:
-            val = hx.get_weight(5)
-            print(math.trunc(val*0.0044))
+        hx.power_down()
+        hx.power_up()
+        time.sleep(0.1)
+    
+    # clean up
+    cleanup()
 
-            hx.power_down()
-            hx.power_up()
-            time.sleep(0.1)
-
-        except (KeyboardInterrupt, SystemExit):
-            cleanAndExit()
 
 def servo():
-    # Set GPIO numbering mode
-    GPIO.setmode(GPIO.BOARD)
+    setup("resetting the servo's position")
+    
+    # Turn on servo relay
+    GPIO.output(21, GPIO.LOW) # GPIO.BOARD = 40
 
     # Set pin 11 as an output, and set servo1 as pin 11 as PWM
-    GPIO.setup(11,GPIO.OUT)
-    servo1 = GPIO.PWM(11,50) # Note 11 is pin, 50 = 50Hz pulse
+    GPIO.setup(17, GPIO.OUT) # BOARD no. = 11
+    servo1 = GPIO.PWM(17, 50) # pin 17, 50Hz pulse
 
     #start PWM running, but with value of 0 (pulse off)
     servo1.start(0)
-    print ("Waiting for 2 seconds")
+    Output.insert(END, "\n Waiting for 2 seconds")
+    Output.update()
     time.sleep(2)
 
     #Let's move the servo!
-    print ("Rotating 180 degrees in 10 steps")
+    Output.insert(END, "\n Rotating 180 degrees in 10 steps")
+    Output.update()
 
     # Define variable duty
     duty = 2
@@ -70,146 +131,174 @@ def servo():
     time.sleep(2)
 
     # Turn back to 90 degrees
-    print ("Turning back to 90 degrees for 2 seconds")
+    Output.insert(END, "\n Turning back to 90 degrees for 2 seconds")
+    Output.update()
+    # print ("Turning back to 90 degrees for 2 seconds")
     servo1.ChangeDutyCycle(7)
     time.sleep(2)
 
     #turn back to 0 degrees
-    print ("Turning back to 0 degrees")
+    Output.insert(END, "\n Turning back to 0 degrees")
+    Output.update()
+    # print ("Turning back to 0 degrees")
     servo1.ChangeDutyCycle(2)
     time.sleep(0.5)
     servo1.ChangeDutyCycle(0)
 
     #Clean things up at the end
     servo1.stop()
-    GPIO.cleanup()
-    print ("Goodbye")
+    GPIO.output(21, GPIO.HIGH) # BOARD no. = 40
+    cleanup()
 
+
+def MPU_Init():
+    bus.write_byte_data(Device_Address, SMPLRT_DIV, 7)
+    bus.write_byte_data(Device_Address, PWR_MGMT_1, 1)
+    bus.write_byte_data(Device_Address, CONFIG, 0)
+    bus.write_byte_data (Device_Address, GYRO_CONFIG, 24)
+    bus.write_byte_data(Device_Address, INT_ENABLE, 1)
+ 
+def read_raw_data(addr):
+    high = bus.read_byte_data(Device_Address, addr)
+    low = bus.read_byte_data(Device_Address, addr + 1)
+    value = ((high << 8)| low)
+    if (value > 32768):
+        value = value - 65536
+    return value
 
 def imu():
-    print("imu calibrated!")
-
-def camera():
-    cv2.namedWindow("Trackbars")
+    setup("IMU")
+     
+    MPU_Init()
+    acc_x = read_raw_data(ACCEL_XOUT_H)
+    acc_y = read_raw_data(ACCEL_YOUT_H)
+    acc_z = read_raw_data(ACCEL_ZOUT_H)
  
-    cv2.createTrackbar("B", "Trackbars", 0, 255, nothing)
-    cv2.createTrackbar("G", "Trackbars", 0, 255, nothing)
-    cv2.createTrackbar("R", "Trackbars", 0, 255, nothing)
+    gyro_x = read_raw_data(GYRO_XOUT_H)
+    gyro_y = read_raw_data(GYRO_YOUT_H)
+    gyro_z = read_raw_data(GYRO_ZOUT_H)
+ 
+    Ax = round(acc_x/15000, 2)
+    Ay = round(acc_y/15000, 2)
+    Az = round(acc_z/15000, 2)
+ 
+    Gx = round(gyro_x/131, 2)
+    Gy = round(gyro_y/131, 2)
+    Gz = round(gyro_z/131, 2)
+ 
+    Output.insert(END, "\nGyrocope (degrees/s): \nGx = " + str(Gx) + " | Gy = " + str(Gy) + " | Gz = " + str(Gz))
+    Output.insert(END, "\nAcceleration (g): \nAx = " + str(Ax) + " | Ay = " + str(Ay) + " | Az = " + str(Az))
+    Output.update()
+    # print("Gx = %.2f" %Gx, "Gy = %.2f" %Gy, "Gz = %.2f" %Gz, "Ax = %.2f g" %Ax, "Ay = %.2f g" %Ay, "Az = %.5f g" %Az)
 
-    camera = PiCamera()
-    camera.resolution = (640, 480)
-    camera.framerate = 30
 
-    rawCapture = PiRGBArray(camera, size=(640, 480))
+def take_image():
+    setup("take image")
+    global current_frame
+    cap = cv2.VideoCapture(0)
 
-    for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
-        image = frame.array
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    ret, frame = cap.read()
+    frame = cv2.flip(frame, 1)
+    name = 'image' + str(current_frame) + '.jpg'
+    cv2.imwrite(name, frame)
+    im = Image.open(name)
+    im.show()
+    current_frame += 1
 
-        B = cv2.getTrackbarPos("B", "Trackbars")
-        G = cv2.getTrackbarPos("G", "Trackbars")
-        R = cv2.getTrackbarPos("R", "Trackbars")
+    cap.release()
+    cv2.destroyAllWindows()
+    
+    
+def take_three_images():
+    setup("take 3 images from 3 different angles")
+    
+    global current_frame
+    
+    # Turn on servo relay
+    GPIO.output(21, GPIO.LOW) # GPIO.BOARD = 40
 
-        green = np.uint8([[[B, G, R]]])
-        hsvGreen = cv2.cvtColor(green,cv2.COLOR_BGR2HSV)
-        lowerLimit = np.uint8([hsvGreen[0][0][0]-10,100,100])
-        upperLimit = np.uint8([hsvGreen[0][0][0]+10,255,255])
+    # Set pin 11 as an output, and set servo1 as pin 11 as PWM
+    GPIO.setup(17, GPIO.OUT) # BOARD no. = 11
+    servo1 = GPIO.PWM(17, 50) # pin 17, 50Hz pulse
 
-        mask = cv2.inRange(hsv, lowerLimit, upperLimit)
+    #start PWM running, but with value of 0 (pulse off)
+    servo1.start(0)
+    
+    servo1.ChangeDutyCycle(2)
+    take_image()
+    servo1.ChangeDutyCycle(7)
+    take_image()
+    servo1.ChangeDutyCycle(12)
+    take_image()
 
-        result = cv2.bitwise_and(image	, image	, mask=mask)
 
-        cv2.imshow("frame", image)
-        cv2.imshow("mask", mask)
-        cv2.imshow("result", result)
-
-        key = cv2.waitKey(1)
-        rawCapture.truncate(0)
-        if key == 27:
+def stream_camera():
+    setup("stream camera")
+    Output.insert(END, "\n Press Q to exit")
+    Output.update()
+    cap = cv2.VideoCapture(0)
+    
+    while True:
+        ret, frame = cap.read()
+        frame = cv2.flip(frame, 1)
+        cv2.imshow('frame', frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-
+        
+    cap.release()
     cv2.destroyAllWindows()
 
-def lights():
-    print("lights turned on!")
 
+## UI ##
 # define root window
 root = tk.Tk()
 
 # getting device screen size
-width = root.winfo_screenwidth()
+width = math.floor(root.winfo_screenwidth()/2.7)
 height = root.winfo_screenheight()
 
 # format root window
 root.title('Anaerobic Digestate Tester')
 root.geometry(f"{str(width)}x{str(height)}")
 root.resizable(False, False)
+root.grid_rowconfigure(0, weight=1)
+root.grid_rowconfigure(1, weight=1)
+root.grid_columnconfigure(0, weight=1)
+root.grid_columnconfigure(1, weight=1)
+# create calibration label frame
+calib_frame = ttk.LabelFrame(root, text='Calibration Options')
+calib_frame.grid(column=0, row=0, padx=20, pady=20, ipadx=20, ipady=20, sticky="se")
 
-# create label frame
-lf = ttk.LabelFrame(root, text='Calibration Options')
-lf.grid(column=0, row=0, padx=20, pady=20, ipadx=20, ipady=20)
+# create operations label frame
+ops_frame = ttk.LabelFrame(root, text='Operations')
+ops_frame.grid(column=1, row=0, padx=20, pady=20, ipadx=20, ipady=20, sticky="sw")
+
 
 # add calibration buttons
-button_dict = {"load cell": load_cell,
+calib_dict = {"read load cell": load_cell,
                "set servo position": servo,
-               "check IMU readings": imu,
-               "record image": camera,
-               "turn on lights": lights}
+               "check IMU readings": imu
+              }
 
-for name, function in button_dict.items():
-    tk.Button(lf, width=20, text=name, padx=5, pady=5, command=function).pack()
+ops_dict = {"take image": take_image,
+            "take 3 images" : take_three_images,
+            "stream camera": stream_camera
+            }
 
-# servo_button = ttk.Button(root, text="Servo", command=servo)
+for name, function in calib_dict.items():
+    tk.Button(calib_frame, width=20, text=name, padx=5, pady=5, command=function).pack()
+    
+for name, function in ops_dict.items():
+    tk.Button(ops_frame, width=20, text=name, padx=5, pady=5, command=function).pack()
+    
+# create output label frame
+output_frame = ttk.LabelFrame(root, text='Output')
+output_frame.grid(column=0, row=1, columnspan=2, padx=20, pady=0, ipadx=20, ipady=20, sticky="n")
 
-# def fahrenheit_to_celsius(f):
-#     """ Convert fahrenheit to celsius
-#     """
-#     return (f - 32) * 5/9
-#
-#
-# # frame
-# frame = ttk.Frame(root)
-#
-#
-# # field options
-# options = {'padx': 5, 'pady': 5}
-#
-# # temperature label
-# temperature_label = ttk.Label(frame, text='Fahrenheit')
-# temperature_label.grid(column=0, row=0, sticky='W', **options)
-#
-# # temperature entry
-# temperature = tk.StringVar()
-# temperature_entry = ttk.Entry(frame, textvariable=temperature)
-# temperature_entry.grid(column=1, row=0, **options)
-# temperature_entry.focus()
-#
-# # convert button
-#
-#
-# def convert_button_clicked():
-#     """  Handle convert button click event
-#     """
-#     try:
-#         f = float(temperature.get())
-#         c = fahrenheit_to_celsius(f)
-#         result = f'{f} Fahrenheit = {c:.2f} Celsius'
-#         result_label.config(text=result)
-#     except ValueError as error:
-#         showerror(title='Error', message=error)
-#
-#
-# convert_button = ttk.Button(frame, text='Convert')
-# convert_button.grid(column=2, row=0, sticky='W', **options)
-# convert_button.configure(command=convert_button_clicked)
-#
-# # result label
-# result_label = ttk.Label(frame)
-# result_label.grid(row=1, columnspan=3, **options)
-#
-# # add padding to the frame and show it
-# frame.grid(padx=10, pady=10)
-
+# set output text box
+Output = Text(output_frame, height=10, width=50)
+Output.pack()
 
 # start the app
+root.protocol("WM_DELETE_WINDOW", on_closing)
 root.mainloop()
