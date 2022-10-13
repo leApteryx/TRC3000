@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter import *
+import tkinter.font as font
 from tkinter.messagebox import showerror
 import RPi.GPIO as GPIO  # import GPIO
 from hx711 import HX711  # import the class HX711
@@ -11,7 +12,7 @@ import smbus2
 from time import sleep
 import cv2
 import numpy as np
-from PIL import Image # PIL = Python Imaging Library
+from PIL import Image, ImageTk # PIL = Python Imaging Library
 
 
 ## system bootup ##
@@ -110,35 +111,35 @@ def servo():
 
     #start PWM running, but with value of 0 (pulse off)
     servo1.start(0)
-    Output.insert(END, "\n Waiting for 2 seconds")
+    Output.insert(END, "\nWaiting for 2 seconds")
     Output.update()
     time.sleep(2)
 
     #Let's move the servo!
-    Output.insert(END, "\n Rotating 180 degrees in 10 steps")
+    Output.insert(END, "\nRotating 180 degrees in 4 steps")
     Output.update()
 
     # Define variable duty
     duty = 2
 
     # Loop for duty values from 2 to 12 (0 to 180 degrees)
-    while duty <= 12:
+    while duty <= 11:
         servo1.ChangeDutyCycle(duty)
         time.sleep(1)
-        duty = duty + 1
+        duty = duty + 3
 
     # Wait a couple of seconds
     time.sleep(2)
 
     # Turn back to 90 degrees
-    Output.insert(END, "\n Turning back to 90 degrees for 2 seconds")
+    Output.insert(END, "\nTurning back to 90 degrees for 2 seconds")
     Output.update()
     # print ("Turning back to 90 degrees for 2 seconds")
     servo1.ChangeDutyCycle(7)
     time.sleep(2)
 
     #turn back to 0 degrees
-    Output.insert(END, "\n Turning back to 0 degrees")
+    Output.insert(END, "\nTurning back to 0 degrees")
     Output.update()
     # print ("Turning back to 0 degrees")
     servo1.ChangeDutyCycle(2)
@@ -202,6 +203,11 @@ def take_image():
     name = 'image' + str(current_frame) + '.jpg'
     cv2.imwrite(name, frame)
     im = Image.open(name)
+#     img = ImageTk.PhotoImage(im)
+#     canvas = Label(output_frame, image=img)
+#     canvas.pack()
+#     im_cropped = im.resize((400, 400), Image.ANTIALIAS)
+#     im_cropped.show()
     im.show()
     current_frame += 1
 
@@ -234,7 +240,7 @@ def take_three_images():
 
 def stream_camera():
     setup("stream camera")
-    Output.insert(END, "\n Press Q to exit")
+    Output.insert(END, "\nCamera closing in 5s...")
     Output.update()
     cap = cv2.VideoCapture(0)
     
@@ -254,30 +260,33 @@ def stream_camera():
 root = tk.Tk()
 
 # getting device screen size
-width = math.floor(root.winfo_screenwidth()/2.7)
-height = root.winfo_screenheight()
+width = math.floor(root.winfo_screenwidth())
+height = math.floor(root.winfo_screenheight())
 
 # format root window
 root.title('Anaerobic Digestate Tester')
 root.geometry(f"{str(width)}x{str(height)}")
 root.resizable(False, False)
+root.option_add("*font", "arial 25")
 root.grid_rowconfigure(0, weight=1)
 root.grid_rowconfigure(1, weight=1)
 root.grid_columnconfigure(0, weight=1)
 root.grid_columnconfigure(1, weight=1)
+# root.grid_columnconfigure(2, weight=8)
+
 # create calibration label frame
 calib_frame = ttk.LabelFrame(root, text='Calibration Options')
-calib_frame.grid(column=0, row=0, padx=20, pady=20, ipadx=20, ipady=20, sticky="se")
+calib_frame.grid(column=0, row=0, padx=10, pady=20, ipadx=20, ipady=20, sticky="se")
 
 # create operations label frame
 ops_frame = ttk.LabelFrame(root, text='Operations')
-ops_frame.grid(column=1, row=0, padx=20, pady=20, ipadx=20, ipady=20, sticky="sw")
+ops_frame.grid(column=1, row=0, padx=10, pady=20, ipadx=20, ipady=20, sticky="sw")
 
 
 # add calibration buttons
-calib_dict = {"read load cell": load_cell,
-               "set servo position": servo,
-               "check IMU readings": imu
+calib_dict = {"check IMU readings": imu,
+              "read load cell": load_cell,
+              "reset servo position": servo
               }
 
 ops_dict = {"take image": take_image,
@@ -285,8 +294,12 @@ ops_dict = {"take image": take_image,
             "stream camera": stream_camera
             }
 
+# myfont = font.Font(size=30)
+
 for name, function in calib_dict.items():
     tk.Button(calib_frame, width=20, text=name, padx=5, pady=5, command=function).pack()
+#     button = tk.Button(calib_frame, width=20, text=name, padx=5, pady=5, command=function).pack()
+#     button['font'] = myfont
     
 for name, function in ops_dict.items():
     tk.Button(ops_frame, width=20, text=name, padx=5, pady=5, command=function).pack()
@@ -298,6 +311,10 @@ output_frame.grid(column=0, row=1, columnspan=2, padx=20, pady=0, ipadx=20, ipad
 # set output text box
 Output = Text(output_frame, height=10, width=50)
 Output.pack()
+
+# set canvas for image
+# canvas = Canvas(output_frame, height=50, width=50)
+# canvas.pack()
 
 # start the app
 root.protocol("WM_DELETE_WINDOW", on_closing)
