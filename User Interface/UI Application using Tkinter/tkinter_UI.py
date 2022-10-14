@@ -1,4 +1,40 @@
-@@ -43,6 +43,7 @@
+import tkinter as tk
+from tkinter import ttk
+from tkinter import *
+import tkinter.font as font
+from tkinter.messagebox import showerror
+import RPi.GPIO as GPIO  # import GPIO
+from hx711 import HX711  # import the class HX711
+import time
+import math
+import sys
+import smbus2
+from time import sleep
+import cv2
+import numpy as np
+from PIL import Image, ImageTk # PIL = Python Imaging Library
+## system bootup ##
+# taring load cell
+hx = HX711(5, 6)
+hx.set_reading_format("MSB", "MSB")
+hx.reset()
+hx.tare()
+# IMU constants
+PWR_MGMT_1 = 0x6B
+SMPLRT_DIV = 0x19
+CONFIG = 0x1A
+GYRO_CONFIG = 0x1B
+INT_ENABLE = 0x38
+ACCEL_XOUT_H = 0x3B
+ACCEL_YOUT_H = 0x3D
+ACCEL_ZOUT_H = 0x3F
+GYRO_XOUT_H = 0x43
+GYRO_YOUT_H = 0x45
+GYRO_ZOUT_H = 0x47
+bus = smbus2.SMBus(1)
+Device_Address = 0x68
+# reset camera image number
+current_frame = 1
 # GPIO setup
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(16, GPIO.OUT) # GPIO.BOARD = 36 (load cell)
@@ -6,7 +42,13 @@ GPIO.setup(20, GPIO.OUT) # GPIO.BOARD = 38 (imu)
 GPIO.setup(21, GPIO.OUT) # GPIO.BOARD = 40 (servo)
 
 
-@@ -56,6 +57,7 @@ def setup(function):
+## functions ##
+def setup(function):
+    Output.delete("1.0", END) # clear existing output
+    Output.insert(END, "Now running: " + function)
+    Output.update()
+    
+    
 def cleanup():
     # turn off all relays
     GPIO.output(16, GPIO.HIGH) # GPIO.BOARD = 36 (load cell)
@@ -14,7 +56,93 @@ def cleanup():
     GPIO.output(21, GPIO.HIGH) # BOARD no. = 40 (servo)
 
     Output.insert(END, "\nGoodbye!")
-@@ -169,6 +171,7 @@ def read_raw_data(addr):
+    Output.update()
+def on_closing():
+    GPIO.cleanup()
+    print("UI closed!")
+    root.destroy()
+def load_cell():
+    setup(load_cell.__name__)
+    
+    # turn on load cell relay
+    GPIO.output(16, GPIO.LOW) # GPIO.BOARD = 36
+    # tare load cell
+    hx = HX711(5, 6)
+    hx.set_reading_format("MSB", "MSB")
+    hx.reset()
+    hx.tare()
+    
+    Output.insert(END, "\nLoad cell tared! Add item now:")
+    Output.update()
+    # read load cell
+    load = 0
+    while not load:
+        val = hx.get_weight(5)
+        load = math.trunc(val*0.0044)
+        Output.insert(END, "\n" + str(load))
+        Output.update()
+        hx.power_down()
+        hx.power_up()
+        time.sleep(0.1)
+    
+    # clean up
+    cleanup()
+def servo():
+    setup("resetting the servo's position")
+    
+    # Turn on servo relay
+    GPIO.output(21, GPIO.LOW) # GPIO.BOARD = 40
+    # Set pin 11 as an output, and set servo1 as pin 11 as PWM
+    GPIO.setup(17, GPIO.OUT) # BOARD no. = 11
+    servo1 = GPIO.PWM(17, 50) # pin 17, 50Hz pulse
+    #start PWM running, but with value of 0 (pulse off)
+    servo1.start(0)
+    Output.insert(END, "\nWaiting for 2 seconds")
+    Output.update()
+    time.sleep(2)
+    #Let's move the servo!
+    Output.insert(END, "\nRotating 180 degrees in 4 steps")
+    Output.update()
+    # Define variable duty
+    duty = 2
+    # Loop for duty values from 2 to 12 (0 to 180 degrees)
+    while duty <= 11:
+        servo1.ChangeDutyCycle(duty)
+        time.sleep(1)
+        duty = duty + 3
+    # Wait a couple of seconds
+    time.sleep(2)
+    # Turn back to 90 degrees
+    Output.insert(END, "\nTurning back to 90 degrees for 2 seconds")
+    Output.update()
+    # print ("Turning back to 90 degrees for 2 seconds")
+    servo1.ChangeDutyCycle(7)
+    time.sleep(2)
+    #turn back to 0 degrees
+    Output.insert(END, "\nTurning back to 0 degrees")
+    Output.update()
+    # print ("Turning back to 0 degrees")
+    servo1.ChangeDutyCycle(2)
+    time.sleep(0.5)
+    servo1.ChangeDutyCycle(0)
+    #Clean things up at the end
+    servo1.stop()
+    GPIO.output(21, GPIO.HIGH) # BOARD no. = 40
+    cleanup()
+def MPU_Init():
+    bus.write_byte_data(Device_Address, SMPLRT_DIV, 7)
+    bus.write_byte_data(Device_Address, PWR_MGMT_1, 1)
+    bus.write_byte_data(Device_Address, CONFIG, 0)
+    bus.write_byte_data (Device_Address, GYRO_CONFIG, 24)
+    bus.write_byte_data(Device_Address, INT_ENABLE, 1)
+ 
+def read_raw_data(addr):
+    high = bus.read_byte_data(Device_Address, addr)
+    low = bus.read_byte_data(Device_Address, addr + 1)
+    value = ((high << 8)| low)
+    if (value > 32768):
+        value = value - 65536
+    return value
 
 def imu():
     setup("IMU")
@@ -22,7 +150,21 @@ def imu():
 
     MPU_Init()
     acc_x = read_raw_data(ACCEL_XOUT_H)
-@@ -190,6 +193,7 @@ def imu():
+    acc_y = read_raw_data(ACCEL_YOUT_H)
+    acc_z = read_raw_data(ACCEL_ZOUT_H)
+ 
+    gyro_x = read_raw_data(GYRO_XOUT_H)
+    gyro_y = read_raw_data(GYRO_YOUT_H)
+    gyro_z = read_raw_data(GYRO_ZOUT_H)
+ 
+    Ax = round(acc_x/15000, 2)
+    Ay = round(acc_y/15000, 2)
+    Az = round(acc_z/15000, 2)
+ 
+    Gx = round(gyro_x/131, 2)
+    Gy = round(gyro_y/131, 2)
+    Gz = round(gyro_z/131, 2)
+ 
     Output.insert(END, "\nGyrocope (degrees/s): \nGx = " + str(Gx) + " | Gy = " + str(Gy) + " | Gz = " + str(Gz))
     Output.insert(END, "\nAcceleration (g): \nAx = " + str(Ax) + " | Ay = " + str(Ay) + " | Az = " + str(Az))
     Output.update()
