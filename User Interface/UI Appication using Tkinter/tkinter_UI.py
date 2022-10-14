@@ -43,7 +43,6 @@ current_frame = 1
 # GPIO setup
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(16, GPIO.OUT) # GPIO.BOARD = 36 (load cell)
-GPIO.setup(20, GPIO.OUT) # GPIO.BOARD = 38 (imu)
 GPIO.setup(21, GPIO.OUT) # GPIO.BOARD = 40 (servo)
 
 
@@ -57,7 +56,6 @@ def setup(function):
 def cleanup():
     # turn off all relays
     GPIO.output(16, GPIO.HIGH) # GPIO.BOARD = 36 (load cell)
-    GPIO.output(20, GPIO.HIGH) # GPIO.BOARD = 38 (imu)
     GPIO.output(21, GPIO.HIGH) # BOARD no. = 40 (servo)
     
     Output.insert(END, "\nGoodbye!")
@@ -171,7 +169,6 @@ def read_raw_data(addr):
 
 def imu():
     setup("IMU")
-    GPIO.output(20, GPIO.LOW) # GPIO.BOARD = 38
      
     MPU_Init()
     acc_x = read_raw_data(ACCEL_XOUT_H)
@@ -193,7 +190,6 @@ def imu():
     Output.insert(END, "\nGyrocope (degrees/s): \nGx = " + str(Gx) + " | Gy = " + str(Gy) + " | Gz = " + str(Gz))
     Output.insert(END, "\nAcceleration (g): \nAx = " + str(Ax) + " | Ay = " + str(Ay) + " | Az = " + str(Az))
     Output.update()
-    cleanup()
     # print("Gx = %.2f" %Gx, "Gy = %.2f" %Gy, "Gz = %.2f" %Gz, "Ax = %.2f g" %Ax, "Ay = %.2f g" %Ay, "Az = %.5f g" %Az)
 
 
