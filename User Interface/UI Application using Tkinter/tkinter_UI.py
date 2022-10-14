@@ -1,3 +1,8 @@
+# TRC3000 Project
+# Team 212
+# Project Title: Anaerobic Digester Sample Tester
+# Date of Submission: 2022-10-14
+
 import tkinter as tk
 from tkinter import ttk
 from tkinter import *
@@ -15,14 +20,9 @@ import numpy as np
 from PIL import Image, ImageTk # PIL = Python Imaging Library
 
 
-## system bootup ##
-# taring load cell
-hx = HX711(5, 6)
-hx.set_reading_format("MSB", "MSB")
-hx.reset()
-hx.tare()
+#------------------------------------------ System Setup ---------------------------------------------#
 
-# IMU constants
+# IMU Constants
 PWR_MGMT_1 = 0x6B
 SMPLRT_DIV = 0x19
 CONFIG = 0x1A
@@ -37,37 +37,37 @@ GYRO_ZOUT_H = 0x47
 bus = smbus2.SMBus(1)
 Device_Address = 0x68
 
-# reset camera image number
+# Counts the number of captured images
 current_frame = 1
 
-# GPIO setup
+# GPIO Setup
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(16, GPIO.OUT) # GPIO.BOARD = 36 (load cell)
 GPIO.setup(21, GPIO.OUT) # GPIO.BOARD = 40 (servo)
 
 
-## functions ##
+#------------------------------------------ Functions ---------------------------------------------#
+
+# Function: To reset the display in the app
 def setup(function):
     Output.delete("1.0", END) # clear existing output
     Output.insert(END, "Now running: " + function)
     Output.update()
     
-    
+# Function: To turn off all the relays    
 def cleanup():
-    # turn off all relays
     GPIO.output(16, GPIO.HIGH) # GPIO.BOARD = 36 (load cell)
     GPIO.output(21, GPIO.HIGH) # BOARD no. = 40 (servo)
-    
     Output.insert(END, "\nGoodbye!")
     Output.update()
 
-
+# Function: To close the user interface app
 def on_closing():
     GPIO.cleanup()
     print("UI closed!")
     root.destroy()
 
-
+# Function: To take a single measurement from the load cell
 def load_cell():
     setup(load_cell.__name__)
     
@@ -98,7 +98,7 @@ def load_cell():
     # clean up
     cleanup()
 
-
+# Function: To reset the servo's position
 def servo():
     setup("resetting the servo's position")
     
@@ -151,14 +151,15 @@ def servo():
     GPIO.output(21, GPIO.HIGH) # BOARD no. = 40
     cleanup()
 
-
+# Subfunction: To declare addresses from the IMU chip
 def MPU_Init():
     bus.write_byte_data(Device_Address, SMPLRT_DIV, 7)
     bus.write_byte_data(Device_Address, PWR_MGMT_1, 1)
     bus.write_byte_data(Device_Address, CONFIG, 0)
     bus.write_byte_data (Device_Address, GYRO_CONFIG, 24)
     bus.write_byte_data(Device_Address, INT_ENABLE, 1)
- 
+
+# Subfunction: To read the raw data from the IMU chip
 def read_raw_data(addr):
     high = bus.read_byte_data(Device_Address, addr)
     low = bus.read_byte_data(Device_Address, addr + 1)
@@ -167,6 +168,7 @@ def read_raw_data(addr):
         value = value - 65536
     return value
 
+# Function: To take a single measurement from the IMU
 def imu():
     setup("IMU")
      
@@ -190,9 +192,8 @@ def imu():
     Output.insert(END, "\nGyrocope (degrees/s): \nGx = " + str(Gx) + " | Gy = " + str(Gy) + " | Gz = " + str(Gz))
     Output.insert(END, "\nAcceleration (g): \nAx = " + str(Ax) + " | Ay = " + str(Ay) + " | Az = " + str(Az))
     Output.update()
-    # print("Gx = %.2f" %Gx, "Gy = %.2f" %Gy, "Gz = %.2f" %Gz, "Ax = %.2f g" %Ax, "Ay = %.2f g" %Ay, "Az = %.5f g" %Az)
 
-
+# Function: To capture an image using the camera
 def take_image():
     setup("take image")
     global current_frame
@@ -203,18 +204,13 @@ def take_image():
     name = 'image' + str(current_frame) + '.jpg'
     cv2.imwrite(name, frame)
     im = Image.open(name)
-#     img = ImageTk.PhotoImage(im)
-#     canvas = Label(output_frame, image=img)
-#     canvas.pack()
-#     im_cropped = im.resize((400, 400), Image.ANTIALIAS)
-#     im_cropped.show()
     im.show()
     current_frame += 1
 
     cap.release()
     cv2.destroyAllWindows()
     
-    
+# Function: To capture 3 different images from 3 different angles using the camera and the servo
 def take_three_images():
     setup("take 3 images from 3 different angles")
     
@@ -237,7 +233,7 @@ def take_three_images():
     servo1.ChangeDutyCycle(12)
     take_image()
 
-
+# Function: To stream the camera
 def stream_camera():
     setup("stream camera")
     Output.insert(END, "\nCamera closing in 5s...")
@@ -255,15 +251,16 @@ def stream_camera():
     cv2.destroyAllWindows()
 
 
-## UI ##
-# define root window
+#------------------------------------------ User Interface ---------------------------------------------#
+
+# Define the root window
 root = tk.Tk()
 
-# getting device screen size
+# Acquire the device screen size
 width = math.floor(root.winfo_screenwidth())
 height = math.floor(root.winfo_screenheight())
 
-# format root window
+# Format the root window
 root.title('Anaerobic Digestate Tester')
 root.geometry(f"{str(width)}x{str(height)}")
 root.resizable(False, False)
@@ -274,16 +271,15 @@ root.grid_columnconfigure(0, weight=1)
 root.grid_columnconfigure(1, weight=1)
 # root.grid_columnconfigure(2, weight=8)
 
-# create calibration label frame
+# Create calibration label frame
 calib_frame = ttk.LabelFrame(root, text='Calibration Options')
 calib_frame.grid(column=0, row=0, padx=10, pady=20, ipadx=20, ipady=20, sticky="se")
 
-# create operations label frame
+# Create operations label frame
 ops_frame = ttk.LabelFrame(root, text='Operations')
 ops_frame.grid(column=1, row=0, padx=10, pady=20, ipadx=20, ipady=20, sticky="sw")
 
-
-# add calibration buttons
+# Add buttons and their corresponding functions
 calib_dict = {"check IMU readings": imu,
               "read load cell": load_cell,
               "reset servo position": servo
@@ -294,28 +290,20 @@ ops_dict = {"take image": take_image,
             "stream camera": stream_camera
             }
 
-# myfont = font.Font(size=30)
-
 for name, function in calib_dict.items():
     tk.Button(calib_frame, width=20, text=name, padx=5, pady=5, command=function).pack()
-#     button = tk.Button(calib_frame, width=20, text=name, padx=5, pady=5, command=function).pack()
-#     button['font'] = myfont
     
 for name, function in ops_dict.items():
     tk.Button(ops_frame, width=20, text=name, padx=5, pady=5, command=function).pack()
     
-# create output label frame
+# Create output label frame
 output_frame = ttk.LabelFrame(root, text='Output')
 output_frame.grid(column=0, row=1, columnspan=2, padx=20, pady=0, ipadx=20, ipady=20, sticky="n")
 
-# set output text box
+# Set output text box
 Output = Text(output_frame, height=10, width=50)
 Output.pack()
 
-# set canvas for image
-# canvas = Canvas(output_frame, height=50, width=50)
-# canvas.pack()
-
-# start the app
+# Launch the app
 root.protocol("WM_DELETE_WINDOW", on_closing)
 root.mainloop()
